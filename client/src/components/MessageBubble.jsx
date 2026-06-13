@@ -1,12 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import { getAvatarColor } from "./Sidebar";
 import { FiPlay, FiPause, FiCheck } from "react-icons/fi";
+import { formatMessageTimestamp } from "../utils/dateUtils";
+
+let currentlyPlayingAudio = null;
 
 function AudioPlayer({ audioData }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef(null);
+  const waveformRef = useRef(null);
 
   useEffect(() => {
     if (audioData) {
@@ -20,6 +24,12 @@ function AudioPlayer({ audioData }) {
       audioRef.current.addEventListener("ended", () => {
         setIsPlaying(false);
         setProgress(0);
+      });
+      audioRef.current.addEventListener("pause", () => {
+        setIsPlaying(false);
+      });
+      audioRef.current.addEventListener("play", () => {
+        setIsPlaying(true);
       });
     }
     return () => {
@@ -35,9 +45,26 @@ function AudioPlayer({ audioData }) {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
+      if (currentlyPlayingAudio && currentlyPlayingAudio !== audioRef.current) {
+        currentlyPlayingAudio.pause();
+      }
       audioRef.current.play().catch(() => {});
+      currentlyPlayingAudio = audioRef.current;
     }
-    setIsPlaying(!isPlaying);
+  };
+
+  const handleSeek = (e) => {
+    if (!waveformRef.current || !audioRef.current || duration === 0) return;
+    
+    const rect = waveformRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const width = rect.width;
+    
+    const percentage = Math.max(0, Math.min(1, clickX / width));
+    const newTime = percentage * duration;
+    
+    audioRef.current.currentTime = newTime;
+    setProgress(newTime);
   };
 
   const formatTime = (time) => {
@@ -52,7 +79,12 @@ function AudioPlayer({ audioData }) {
       <button className="audio-play-button" onClick={togglePlay} title="Play/Pause">
         {isPlaying ? <FiPause /> : <FiPlay />}
       </button>
-      <div className="audio-waveform-bar">
+      <div 
+        className="audio-waveform-bar" 
+        ref={waveformRef}
+        onClick={handleSeek}
+        style={{ cursor: "pointer" }}
+      >
         <div 
           className="audio-progress" 
           style={{ width: `${duration > 0 ? (progress / duration) * 100 : 0}%` }}
@@ -105,7 +137,7 @@ function MessageBubble({ message, currentUser, roomSize }) {
         </div>
         
         <div className="message-meta">
-          <span className="message-time">{message.time}</span>
+          <span className="message-time">{message.timestamp ? formatMessageTimestamp(message.timestamp) : message.time}</span>
           {renderStatus()}
         </div>
       </div>

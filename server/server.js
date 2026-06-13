@@ -50,10 +50,7 @@ const emitSystemMessage = (room, text) => {
     id: `sys-${Date.now()}`,
     type: "system",
     text,
-    time: new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    timestamp: new Date().toISOString(),
   };
 
   if (!roomMessages[room]) {
@@ -137,29 +134,34 @@ io.on("connection", (socket) => {
   socket.on("send_message", (data) => {
     const room = socket.room;
     const author = socket.username;
-    const content = typeof data.message === "string" ? data.message.trim() : "";
 
-    if (!room || !author || !content) {
+    if (!room || !author) {
       return;
     }
 
-    const message = {
+    let messageObj = {
       id: `${socket.id}-${Date.now()}`,
-      type: "message",
       author,
-      message: content,
-      time: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      timestamp: new Date().toISOString(),
     };
+
+    if (data.type === "audio") {
+      if (!data.audioData) return;
+      messageObj.type = "audio";
+      messageObj.audioData = data.audioData;
+    } else {
+      const content = typeof data.message === "string" ? data.message.trim() : "";
+      if (!content) return;
+      messageObj.type = "message";
+      messageObj.message = content;
+    }
 
     if (!roomMessages[room]) {
       roomMessages[room] = [];
     }
-    roomMessages[room].push(message);
+    roomMessages[room].push(messageObj);
 
-    io.to(room).emit("receive_message", message);
+    io.to(room).emit("receive_message", messageObj);
   });
 
   socket.on("typing", () => {

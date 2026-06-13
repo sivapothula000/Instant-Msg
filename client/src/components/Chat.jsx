@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Header from "./Header";
 import Sidebar from "./Sidebar";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
 import NotificationMessage from "./NotificationMessage";
+import { isSameDay, formatDateSeparator } from "../utils/dateUtils";
 
 const formatTyping = (typingUsers, currentUser) => {
   const active = typingUsers.filter((user) => user !== currentUser);
@@ -21,6 +22,11 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
   const [ready, setReady] = useState(true);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(
+    typeof window !== "undefined" && window.visualViewport 
+      ? window.visualViewport.height 
+      : typeof window !== "undefined" ? window.innerHeight : "100dvh"
+  );
 
   const messagesEndRef = useRef(null);
   const feedRef = useRef(null);
@@ -37,6 +43,40 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleVisualViewport = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+        
+        // Ensure scroll to bottom on keyboard open
+        if (messagesEndRef.current) {
+          // Small delay allows DOM to settle before scroll calculation
+          setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+          }, 50);
+        }
+      }
+    };
+
+    if (window.visualViewport) {
+      handleVisualViewport();
+      window.visualViewport.addEventListener("resize", handleVisualViewport);
+      window.visualViewport.addEventListener("scroll", handleVisualViewport);
+    } else {
+      const handleResizeFallback = () => setViewportHeight(window.innerHeight);
+      window.addEventListener("resize", handleResizeFallback);
+    }
+
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener("resize", handleVisualViewport);
+        window.visualViewport.removeEventListener("scroll", handleVisualViewport);
+      } else {
+        window.removeEventListener("resize", () => setViewportHeight(window.innerHeight));
+      }
     };
   }, []);
 
@@ -134,7 +174,10 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
   const typingText = formatTyping(typingUsers, currentUser);
 
   return (
-    <div className="chat-layout-wrapper">
+    <div 
+      className="chat-layout-wrapper"
+      style={{ height: typeof viewportHeight === "number" ? `${viewportHeight}px` : viewportHeight }}
+    >
       
       {/* Desktop Sidebar */}
       <div className="desktop-only sidebar-container">
@@ -179,18 +222,30 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
           ) : messages.length === 0 ? (
             <div className="empty-state">Start the conversation with your first message.</div>
           ) : (
-            messages.map((message) =>
-              message.type === "system" ? (
-                <NotificationMessage key={message.id} text={message.text} />
-              ) : (
-                <MessageBubble 
-                  key={message.id} 
-                  message={message} 
-                  currentUser={currentUser} 
-                  roomSize={users.length} 
-                />
-              ),
-            )
+            messages.map((message, index) => {
+              const prevMessage = index > 0 ? messages[index - 1] : null;
+              // Only show separator if both have timestamps and they are on different days (or if it's the first message)
+              const showDateSeparator = message.timestamp && (!prevMessage || !prevMessage.timestamp || !isSameDay(prevMessage.timestamp, message.timestamp));
+              
+              return (
+                <React.Fragment key={message.id}>
+                  {showDateSeparator && (
+                    <div className="date-separator animate-fade-in-down">
+                      <span>{formatDateSeparator(message.timestamp)}</span>
+                    </div>
+                  )}
+                  {message.type === "system" ? (
+                    <NotificationMessage message={message} />
+                  ) : (
+                    <MessageBubble 
+                      message={message} 
+                      currentUser={currentUser} 
+                      roomSize={users.length} 
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })
           )}
           {typingText ? <div className="typing-indicator">{typingText}</div> : null}
           <div ref={messagesEndRef} className="message-end-marker" />

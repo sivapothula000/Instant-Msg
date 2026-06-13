@@ -24,13 +24,17 @@ function MessageInput({ onSend, onTyping }) {
 
   useEffect(() => {
     return () => {
-      onTyping(false);
+      // Intentionally not calling onTyping(false) here because onTyping changes identity.
+      // Clean up intervals and streams on component unmount
       if (timerRef.current) clearInterval(timerRef.current);
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
       }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
     };
-  }, [onTyping]);
+  }, []);
 
   const handleSendText = () => {
     if (!text.trim()) return;
@@ -55,8 +59,10 @@ function MessageInput({ onSend, onTyping }) {
 
   const startRecording = async () => {
     try {
+      console.log("Requesting microphone permission...");
       setRecordError("");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("Microphone access granted.");
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
 
@@ -65,26 +71,34 @@ function MessageInput({ onSend, onTyping }) {
       if (typeof MediaRecorder !== "undefined") {
         if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mimeType = "audio/webm;codecs=opus";
         else if (MediaRecorder.isTypeSupported("audio/webm")) mimeType = "audio/webm";
+        else if (MediaRecorder.isTypeSupported("audio/mp4")) mimeType = "audio/mp4";
         else if (MediaRecorder.isTypeSupported("audio/ogg")) mimeType = "audio/ogg";
       }
+
+      console.log("Selected mimeType:", mimeType);
 
       try {
         mediaRecorderRef.current = mimeType
           ? new MediaRecorder(stream, { mimeType })
           : new MediaRecorder(stream);
       } catch (err) {
+        console.warn("Failed to create MediaRecorder with mimeType, falling back to default:", err);
         mediaRecorderRef.current = new MediaRecorder(stream);
       }
+      console.log("MediaRecorder created.");
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
+          console.log("Received audio chunk, size:", event.data.size);
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
+        console.log("MediaRecorder stopped. Generating Blob...");
         const type = (mediaRecorderRef.current && mediaRecorderRef.current.mimeType) || mimeType || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type });
+        console.log("Audio Blob generated. Size:", blob.size, "Type:", type);
         setAudioBlob(blob);
         if (mediaStreamRef.current) {
           mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -92,7 +106,8 @@ function MessageInput({ onSend, onTyping }) {
         }
       };
 
-      mediaRecorderRef.current.start();
+      mediaRecorderRef.current.start(1000); // Pass timeslice to emit chunks every second
+      console.log("Recording started.");
       setIsRecording(true);
       setRecordingTime(0);
 
