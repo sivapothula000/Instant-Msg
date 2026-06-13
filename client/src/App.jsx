@@ -17,10 +17,10 @@ function App() {
 
   const socket = useMemo(() => {
     const socketUrl = getSocketUrl();
-    const client = io(socketUrl, {
-      transports: ["websocket"],
-      autoConnect: false,
-    });
+   const client = io(socketUrl, {
+  autoConnect: false,
+  transports: ["polling", "websocket"],
+});
 
     client.on("connect", () => setStatus("connected"));
     client.on("disconnect", () => setStatus("disconnected"));

@@ -11,12 +11,15 @@ const roomUsers = {};
 const roomMessages = {};
 const roomTyping = {};
 
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
-  transports: ["websocket", "polling"],
+const io = new Server(server,{
+  cors:{
+    origin:[
+      "http://localhost:5173",
+      "https://super-instant-msg.vercel.app"
+    ],
+    methods:["GET","POST"],
+    credentials:true
+  }
 });
 
 const cleanEmptyRoom = (room) => {
