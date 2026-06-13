@@ -1,0 +1,122 @@
+.join-shell {
+  width: 100%;
+  max-width: 480px;
+  padding: 20px;
+  animation: fadeInDown 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.join-card {
+  border-radius: 32px;
+  padding: 40px;
+  position: relative;
+  overflow: hidden;
+}
+
+.join-card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.6), transparent);
+}
+
+.brand-block {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.brand-mark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  color: #080a0f;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  background: var(--gold-gradient);
+  border-radius: 20px;
+  box-shadow: var(--gold-glow);
+}
+
+.brand-block h1 {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 36px;
+  letter-spacing: -0.03em;
+  background: linear-gradient(to right, #ffffff, #d4af37);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-block p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.join-form {
+  display: grid;
+  gap: 24px;
+}
+
+.join-form label {
+  display: grid;
+  gap: 10px;
+  color: #d1d5db;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.join-form input {
+  width: 100%;
+  border-radius: 16px;
+  padding: 16px 20px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.join-form input:focus {
+  border-color: var(--gold-primary);
+  background: rgba(212, 175, 55, 0.05);
+  box-shadow: inset 0 0 0 1px var(--gold-primary);
+}
+
+.room-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+}
+
+.join-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.error-text {
+  color: #f87171;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .join-card {
+    padding: 30px 24px;
+  }
+  .brand-block h1 {
+    font-size: 32px;
+  }
+}

@@ -1,0 +1,42 @@
+body{
+  margin:0;
+  background:#f2f2f2;
+  font-family:Arial;
+}
+
+#root{
+  text-align:center;
+  margin-top:100px;
+}
+
+input{
+  width:250px;
+  padding:10px;
+  font-size:16px;
+}
+
+button{
+  padding:10px 20px;
+  font-size:16px;
+  cursor:pointer;
+}
+
+.chat-body{
+    margin-top:20px;
+}
+
+.my-message{
+    background:#DCF8C6;
+    padding:10px;
+    margin:10px;
+    border-radius:10px;
+    text-align:right;
+}
+
+.other-message{
+    background:#FFFFFF;
+    padding:10px;
+    margin:10px;
+    border-radius:10px;
+    text-align:left;
+}

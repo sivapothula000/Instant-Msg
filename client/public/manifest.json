@@ -1,0 +1,15 @@
+{
+  "short_name": "InstantMsg",
+  "name": "Instant Msg",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "48x48",
+      "type": "image/svg+xml"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#080a0f",
+  "background_color": "#080a0f"
+}
