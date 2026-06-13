@@ -185,6 +185,7 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
     };
 
     const handleReceiveMessage = (message) => {
+      console.log(`[CLIENT] Frontend received message:`, message.id, message.type);
       setMessages((state) => [...state, message]);
       if (!visibleRef.current) {
         setUnreadCount((value) => value + 1);
@@ -322,6 +323,7 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
             <div className="empty-state">Start the conversation with your first message.</div>
           ) : (
             messages.map((message, index) => {
+              console.log(`[CLIENT] Renderer mapping message:`, message.id, message.type);
               const prevMessage = index > 0 ? messages[index - 1] : null;
               // Only show separator if both have timestamps and they are on different days (or if it's the first message)
               const showDateSeparator = message.timestamp && (!prevMessage || !prevMessage.timestamp || !isSameDay(prevMessage.timestamp, message.timestamp));

@@ -12,6 +12,7 @@ const roomMessages = {};
 const roomTyping = {};
 
 const io = new Server(server,{
+  maxHttpBufferSize: 1e7, // 10 MB to allow large audio blobs
   cors:{
     origin:[
       "http://localhost:5173",
@@ -139,6 +140,8 @@ io.on("connection", (socket) => {
       return;
     }
 
+    console.log(`[SERVER] Received message payload from ${author} in ${room}:`, { type: data.type, hasAudio: !!data.audioData, size: data.audioData?.length });
+
     let messageObj = {
       id: `${socket.id}-${Date.now()}`,
       author,
@@ -161,6 +164,7 @@ io.on("connection", (socket) => {
     }
     roomMessages[room].push(messageObj);
 
+    console.log(`[SERVER] Broadcasting message:`, messageObj.id, messageObj.type);
     io.to(room).emit("receive_message", messageObj);
   });
 

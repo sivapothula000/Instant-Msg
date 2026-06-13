@@ -54,6 +54,7 @@ function MessageInput({ onSend, onTyping }) {
     const reader = new FileReader();
     reader.readAsDataURL(audioBlob);
     reader.onloadend = () => {
+      console.log(`[CLIENT] Socket emitting voice_message, payload size:`, reader.result.length);
       onSend({ type: "audio", audioData: reader.result });
       setAudioBlob(null);
       setRecordingTime(0);
@@ -106,6 +107,7 @@ function MessageInput({ onSend, onTyping }) {
       mediaRecorderRef.current.onstop = () => {
         const type = (mediaRecorderRef.current?.mimeType) || mimeType || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type });
+        console.log(`[CLIENT] Blob created:`, blob.size, blob.type);
         const url = URL.createObjectURL(blob);
         setAudioBlob(blob);
         setAudioUrl(url);

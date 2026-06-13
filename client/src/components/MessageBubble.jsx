@@ -13,6 +13,7 @@ function AudioPlayer({ audioData }) {
   const waveformRef = useRef(null);
 
   useEffect(() => {
+    console.log(`[CLIENT] Audio player created, data length:`, audioData?.length);
     const player = new Audio(audioData);
     audioRef.current = player;
 
