@@ -8,6 +8,7 @@ function MessageInput({ onSend, onTyping }) {
   // Audio Recording State
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);
   const [recordingTime, setRecordingTime] = useState(0);
   
   const mediaRecorderRef = useRef(null);
@@ -16,6 +17,7 @@ function MessageInput({ onSend, onTyping }) {
   const timerRef = useRef(null);
   const textareaRef = useRef(null);
   const [recordError, setRecordError] = useState("");
+  const [recordingSupported, setRecordingSupported] = useState(true);
 
   const emojis = useMemo(
     () => ["😀", "😄", "😉", "😍", "🤔", "👍", "🎉", "💬", "🔥", "✨"],
@@ -24,8 +26,6 @@ function MessageInput({ onSend, onTyping }) {
 
   useEffect(() => {
     return () => {
-      // Intentionally not calling onTyping(false) here because onTyping changes identity.
-      // Clean up intervals and streams on component unmount
       if (timerRef.current) clearInterval(timerRef.current);
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
         mediaRecorderRef.current.stop();
@@ -33,8 +33,11 @@ function MessageInput({ onSend, onTyping }) {
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       }
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
     };
-  }, []);
+  }, [audioUrl]);
 
   const handleSendText = () => {
     if (!text.trim()) return;
@@ -54,63 +57,71 @@ function MessageInput({ onSend, onTyping }) {
       onSend({ type: "audio", audioData: reader.result });
       setAudioBlob(null);
       setRecordingTime(0);
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+        setAudioUrl(null);
+      }
     };
   };
 
   const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setRecordError("Audio recording is not supported in this browser.");
+      setRecordingSupported(false);
+      return;
+    }
+
     try {
-      console.log("Requesting microphone permission...");
       setRecordError("");
+      setRecordingSupported(true);
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      console.log("Microphone access granted.");
       mediaStreamRef.current = stream;
       audioChunksRef.current = [];
 
-      // choose supported mimeType if available
       let mimeType = "";
-      if (typeof MediaRecorder !== "undefined") {
-        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mimeType = "audio/webm;codecs=opus";
-        else if (MediaRecorder.isTypeSupported("audio/webm")) mimeType = "audio/webm";
-        else if (MediaRecorder.isTypeSupported("audio/mp4")) mimeType = "audio/mp4";
-        else if (MediaRecorder.isTypeSupported("audio/ogg")) mimeType = "audio/ogg";
+      if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        mimeType = "audio/webm;codecs=opus";
+      } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+        mimeType = "audio/webm";
+      } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+        mimeType = "audio/mp4";
+      } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+        mimeType = "audio/ogg";
       }
-
-      console.log("Selected mimeType:", mimeType);
 
       try {
         mediaRecorderRef.current = mimeType
           ? new MediaRecorder(stream, { mimeType })
           : new MediaRecorder(stream);
       } catch (err) {
-        console.warn("Failed to create MediaRecorder with mimeType, falling back to default:", err);
         mediaRecorderRef.current = new MediaRecorder(stream);
       }
-      console.log("MediaRecorder created.");
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
-          console.log("Received audio chunk, size:", event.data.size);
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
-        console.log("MediaRecorder stopped. Generating Blob...");
-        const type = (mediaRecorderRef.current && mediaRecorderRef.current.mimeType) || mimeType || "audio/webm";
+        const type = (mediaRecorderRef.current?.mimeType) || mimeType || "audio/webm";
         const blob = new Blob(audioChunksRef.current, { type });
-        console.log("Audio Blob generated. Size:", blob.size, "Type:", type);
+        const url = URL.createObjectURL(blob);
         setAudioBlob(blob);
+        setAudioUrl(url);
         if (mediaStreamRef.current) {
           mediaStreamRef.current.getTracks().forEach((track) => track.stop());
           mediaStreamRef.current = null;
         }
       };
 
-      mediaRecorderRef.current.start(1000); // Pass timeslice to emit chunks every second
-      console.log("Recording started.");
+      mediaRecorderRef.current.onerror = (event) => {
+        setRecordError("Recording failed. Please try again.");
+      };
+
+      mediaRecorderRef.current.start(1000);
       setIsRecording(true);
       setRecordingTime(0);
-
       timerRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
@@ -130,6 +141,7 @@ function MessageInput({ onSend, onTyping }) {
 
   const cancelRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.onstop = null;
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
@@ -139,6 +151,10 @@ function MessageInput({ onSend, onTyping }) {
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
+    }
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
     }
   };
 
@@ -203,6 +219,9 @@ function MessageInput({ onSend, onTyping }) {
             <FiMic className="preview-icon" />
             <span>Voice Message ({formatTime(recordingTime)})</span>
           </div>
+          {audioUrl && (
+            <audio className="audio-preview-player" controls src={audioUrl} />
+          )}
           <div className="recording-actions">
             <button className="icon-button danger" onClick={cancelRecording} title="Delete">
               <FiTrash2 />
@@ -244,6 +263,11 @@ function MessageInput({ onSend, onTyping }) {
       {recordError && (
         <div className="record-error" style={{ color: "#f87171", marginTop: 6, fontSize: 12 }}>
           {recordError}
+        </div>
+      )}
+      {!recordingSupported && (
+        <div className="record-error" style={{ color: "#f87171", marginTop: 6, fontSize: 12 }}>
+          Your browser does not support audio recording.
         </div>
       )}
     </div>

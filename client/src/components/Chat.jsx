@@ -4,6 +4,7 @@ import Sidebar from "./Sidebar";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
 import NotificationMessage from "./NotificationMessage";
+import SettingsPanel from "./SettingsPanel";
 import { isSameDay, formatDateSeparator } from "../utils/dateUtils";
 
 const formatTyping = (typingUsers, currentUser) => {
@@ -22,6 +23,18 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
   const [ready, setReady] = useState(true);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState({
+    theme: "dark",
+    notificationSounds: true,
+    bubbleSize: "medium",
+    fontSize: "medium",
+    autoScroll: true,
+    showTimestamps: true,
+    showJoinNotifications: true,
+  });
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(
     typeof window !== "undefined" && window.visualViewport 
       ? window.visualViewport.height 
@@ -31,6 +44,9 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
   const messagesEndRef = useRef(null);
   const feedRef = useRef(null);
   const visibleRef = useRef(true);
+  const isNearBottomRef = useRef(true);
+  const hasHydratedSettingsRef = useRef(false);
+  const initialMessagesLoadedRef = useRef(false);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -50,10 +66,8 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
     const handleVisualViewport = () => {
       if (window.visualViewport) {
         setViewportHeight(window.visualViewport.height);
-        
-        // Ensure scroll to bottom on keyboard open
-        if (messagesEndRef.current) {
-          // Small delay allows DOM to settle before scroll calculation
+
+        if (isNearBottomRef.current && messagesEndRef.current) {
           setTimeout(() => {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
           }, 50);
@@ -68,23 +82,81 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
     } else {
       const handleResizeFallback = () => setViewportHeight(window.innerHeight);
       window.addEventListener("resize", handleResizeFallback);
+      return () => {
+        window.removeEventListener("resize", handleResizeFallback);
+      };
     }
 
     return () => {
       if (window.visualViewport) {
         window.visualViewport.removeEventListener("resize", handleVisualViewport);
         window.visualViewport.removeEventListener("scroll", handleVisualViewport);
-      } else {
-        window.removeEventListener("resize", () => setViewportHeight(window.innerHeight));
       }
     };
   }, []);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    if (!settingsOpen) return;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem("instant-msg-settings") : null;
+    if (stored) {
+      try {
+        setSettings(JSON.parse(stored));
+      } catch (error) {
+        console.warn("Failed to read saved settings", error);
+      }
     }
-  }, [messages, typingUsers]);
+    hasHydratedSettingsRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedSettingsRef.current) return;
+    window.localStorage.setItem("instant-msg-settings", JSON.stringify(settings));
+    document.body.dataset.theme = settings.theme;
+    document.body.dataset.bubbleSize = settings.bubbleSize;
+    document.body.dataset.fontSize = settings.fontSize;
+  }, [settings]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+
+  const handleFeedScroll = () => {
+    const feed = feedRef.current;
+    if (!feed) return;
+    const distanceFromBottom = feed.scrollHeight - (feed.scrollTop + feed.clientHeight);
+    const nearBottom = distanceFromBottom <= 140;
+    isNearBottomRef.current = nearBottom;
+    setIsNearBottom(nearBottom);
+    if (nearBottom) {
+      setNewMessageCount(0);
+    }
+  };
+
+  useEffect(() => {
+    const latest = messages[messages.length - 1];
+    if (!latest || !messagesEndRef.current) return;
+    const isOwnMessage = latest.author === currentUser;
+    const isSystem = latest.type === "system";
+    const shouldScroll =
+      isOwnMessage ||
+      (settings.autoScroll && (isNearBottom || !initialMessagesLoadedRef.current));
+
+    if (shouldScroll) {
+      scrollToBottom();
+      setNewMessageCount(0);
+    } else if (!isOwnMessage && !isSystem) {
+      setNewMessageCount((count) => count + 1);
+    }
+
+    initialMessagesLoadedRef.current = true;
+  }, [messages, isNearBottom, settings.autoScroll, currentUser]);
 
   useEffect(() => {
     const handleRoomData = ({ users: roomUsers, messages: roomMessages }) => {
@@ -93,14 +165,39 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
       setReady(true);
     };
 
+    const playNotificationSound = () => {
+      if (!settings.notificationSounds || typeof window === "undefined") return;
+      try {
+        const context = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(440, context.currentTime);
+        gain.gain.setValueAtTime(0.07, context.currentTime);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.05);
+        oscillator.onended = () => context.close();
+      } catch (error) {
+        console.warn("Notification sound blocked or unsupported", error);
+      }
+    };
+
     const handleReceiveMessage = (message) => {
       setMessages((state) => [...state, message]);
       if (!visibleRef.current) {
         setUnreadCount((value) => value + 1);
       }
+      if (message.author !== currentUser && message.type !== "system") {
+        playNotificationSound();
+      }
     };
 
     const handleSystemMessage = (message) => {
+      if (!settings.showJoinNotifications && message.type === "system") {
+        return;
+      }
       setMessages((state) => [...state, message]);
       if (!visibleRef.current) {
         setUnreadCount((value) => value + 1);
@@ -109,6 +206,7 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
 
     const handleUserList = (roomUsers) => setUsers(roomUsers || []);
     const handleTypingUpdate = (typingList) => setTypingUsers(typingList || []);
+
     const handleConnected = () => setStatus("connected");
     const handleDisconnected = () => setStatus("disconnected");
     const handleReconnecting = () => setStatus("reconnecting");
@@ -212,11 +310,12 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
           roomCode={roomCode}
           userCount={users.length}
           onToggleSidebar={() => setShowMobileSidebar(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
           status={status}
           unreadCount={unreadCount}
         />
 
-        <div className="chat-feed" ref={feedRef}>
+        <div className="chat-feed" ref={feedRef} onScroll={handleFeedScroll}>
           {!ready ? (
             <div className="empty-state">Connecting to the room...</div>
           ) : messages.length === 0 ? (
@@ -241,6 +340,7 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
                       message={message} 
                       currentUser={currentUser} 
                       roomSize={users.length} 
+                      showTimestamps={settings.showTimestamps}
                     />
                   )}
                 </React.Fragment>
@@ -249,6 +349,11 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
           )}
           {typingText ? <div className="typing-indicator">{typingText}</div> : null}
           <div ref={messagesEndRef} className="message-end-marker" />
+          {!isNearBottom && newMessageCount > 0 && (
+            <button className="new-message-button" onClick={scrollToBottom}>
+              {newMessageCount} new message{newMessageCount > 1 ? "s" : ""}
+            </button>
+          )}
         </div>
 
         <div className="composer-container">
@@ -268,6 +373,15 @@ function Chat({ socket, currentUser, roomCode, onLeave, initialData }) {
             </div>
           </div>
         </div>
+      )}
+      {settingsOpen && (
+        <SettingsPanel
+          settings={settings}
+          onUpdate={setSettings}
+          onClose={() => setSettingsOpen(false)}
+          roomCode={roomCode}
+          onLeave={confirmLeave}
+        />
       )}
     </div>
   );

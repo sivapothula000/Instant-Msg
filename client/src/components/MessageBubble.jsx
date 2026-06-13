@@ -13,29 +13,33 @@ function AudioPlayer({ audioData }) {
   const waveformRef = useRef(null);
 
   useEffect(() => {
-    if (audioData) {
-      audioRef.current = new Audio(audioData);
-      audioRef.current.addEventListener("loadedmetadata", () => {
-        setDuration(audioRef.current.duration);
-      });
-      audioRef.current.addEventListener("timeupdate", () => {
-        setProgress(audioRef.current.currentTime);
-      });
-      audioRef.current.addEventListener("ended", () => {
-        setIsPlaying(false);
-        setProgress(0);
-      });
-      audioRef.current.addEventListener("pause", () => {
-        setIsPlaying(false);
-      });
-      audioRef.current.addEventListener("play", () => {
-        setIsPlaying(true);
-      });
-    }
+    const player = new Audio(audioData);
+    audioRef.current = player;
+
+    const handleLoaded = () => setDuration(player.duration);
+    const handleTimeUpdate = () => setProgress(player.currentTime);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setProgress(0);
+    };
+    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => setIsPlaying(true);
+
+    player.addEventListener("loadedmetadata", handleLoaded);
+    player.addEventListener("timeupdate", handleTimeUpdate);
+    player.addEventListener("ended", handleEnded);
+    player.addEventListener("pause", handlePause);
+    player.addEventListener("play", handlePlay);
+
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
+      player.removeEventListener("loadedmetadata", handleLoaded);
+      player.removeEventListener("timeupdate", handleTimeUpdate);
+      player.removeEventListener("ended", handleEnded);
+      player.removeEventListener("pause", handlePause);
+      player.removeEventListener("play", handlePlay);
+      player.pause();
+      if (currentlyPlayingAudio === player) {
+        currentlyPlayingAudio = null;
       }
     };
   }, [audioData]);
@@ -95,7 +99,7 @@ function AudioPlayer({ audioData }) {
   );
 }
 
-function MessageBubble({ message, currentUser, roomSize }) {
+function MessageBubble({ message, currentUser, roomSize, showTimestamps = true }) {
   const own = message.author === currentUser;
   
   const renderStatus = () => {
@@ -137,7 +141,9 @@ function MessageBubble({ message, currentUser, roomSize }) {
         </div>
         
         <div className="message-meta">
-          <span className="message-time">{message.timestamp ? formatMessageTimestamp(message.timestamp) : message.time}</span>
+          {showTimestamps && (
+            <span className="message-time">{message.timestamp ? formatMessageTimestamp(message.timestamp) : message.time}</span>
+          )}
           {renderStatus()}
         </div>
       </div>

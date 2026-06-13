@@ -1,6 +1,6 @@
 import { FiMenu, FiSettings } from "react-icons/fi";
 
-function Header({ roomCode, userCount, onToggleSidebar, status, unreadCount }) {
+function Header({ roomCode, userCount, onToggleSidebar, onOpenSettings, status, unreadCount }) {
   return (
     <div className="chat-main-header glass-card">
       <div className="header-mobile-left">
@@ -20,7 +20,7 @@ function Header({ roomCode, userCount, onToggleSidebar, status, unreadCount }) {
 
       <div className="header-right">
         <span className={`connection-badge ${status}`}>{status}</span>
-        <button type="button" className="icon-button" title="Settings">
+        <button type="button" className="icon-button" title="Settings" onClick={onOpenSettings}>
           <FiSettings />
         </button>
       </div>
