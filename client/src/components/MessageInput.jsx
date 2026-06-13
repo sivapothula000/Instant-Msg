@@ -11,9 +11,11 @@ function MessageInput({ onSend, onTyping }) {
   const [recordingTime, setRecordingTime] = useState(0);
   
   const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
   const textareaRef = useRef(null);
+  const [recordError, setRecordError] = useState("");
 
   const emojis = useMemo(
     () => ["😀", "😄", "😉", "😍", "🤔", "👍", "🎉", "💬", "🔥", "✨"],
@@ -53,33 +55,53 @@ function MessageInput({ onSend, onTyping }) {
 
   const startRecording = async () => {
     try {
+      setRecordError("");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      mediaStreamRef.current = stream;
       audioChunksRef.current = [];
 
+      // choose supported mimeType if available
+      let mimeType = "";
+      if (typeof MediaRecorder !== "undefined") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) mimeType = "audio/webm;codecs=opus";
+        else if (MediaRecorder.isTypeSupported("audio/webm")) mimeType = "audio/webm";
+        else if (MediaRecorder.isTypeSupported("audio/ogg")) mimeType = "audio/ogg";
+      }
+
+      try {
+        mediaRecorderRef.current = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+      } catch (err) {
+        mediaRecorderRef.current = new MediaRecorder(stream);
+      }
+
       mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
       mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const type = (mediaRecorderRef.current && mediaRecorderRef.current.mimeType) || mimeType || "audio/webm";
+        const blob = new Blob(audioChunksRef.current, { type });
         setAudioBlob(blob);
-        stream.getTracks().forEach(track => track.stop());
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          mediaStreamRef.current = null;
+        }
       };
 
       mediaRecorderRef.current.start();
       setIsRecording(true);
       setRecordingTime(0);
-      
+
       timerRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
-      
     } catch (err) {
       console.error("Microphone access denied or error:", err);
-      alert("Microphone access is required to send voice messages.");
+      setRecordError("Unable to access microphone. Allow microphone permissions or use a supported browser.");
     }
   };
 
@@ -99,6 +121,10 @@ function MessageInput({ onSend, onTyping }) {
     clearInterval(timerRef.current);
     setAudioBlob(null);
     setRecordingTime(0);
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
   };
 
   const handleKeyDown = (event) => {
@@ -198,6 +224,11 @@ function MessageInput({ onSend, onTyping }) {
               </button>
             )}
           </div>
+        </div>
+      )}
+      {recordError && (
+        <div className="record-error" style={{ color: "#f87171", marginTop: 6, fontSize: 12 }}>
+          {recordError}
         </div>
       )}
     </div>
