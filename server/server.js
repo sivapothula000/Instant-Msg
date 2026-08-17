@@ -9,16 +9,27 @@ const allowedOrigins = [
   "http://localhost:5173",
   "https://super-instant-msg.vercel.app",
   "https://instant-msg.sivapothula.in",
-  "https://nt-msg.sivapothula.in",
 ];
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.log("Blocked CORS origin:", origin);
+    return callback(new Error("Not allowed by CORS"));
+  },
+
+  methods: ["GET", "POST"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 
 const server = http.createServer(app);
 
@@ -28,12 +39,7 @@ const roomTyping = {};
 
 const io = new Server(server, {
   maxHttpBufferSize: 1e7,
-
-  cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true,
-  },
+  cors: corsOptions,
 });
 
 const cleanEmptyRoom = (room) => {
